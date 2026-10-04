@@ -746,7 +746,7 @@ function openDetail(s) {
 // billing — so the worst case if someone copies it is hitting the free quota.
 // =====================================================================
 const GEMINI_MODEL = "gemini-flash-latest";   // Google alias for the current Flash model
-const GEMINI_KEY_ENC = "";   // see CLAUDE.md -> "AI chat" for how to set this
+const GEMINI_KEY_ENC = "d2tBWUJHUzNMNjd4ZjZFZzFhSnVXS1dEdlpRODcwWnItRzRfZWdUWVRMZ0o2TlI4YkEuUUE=";   // see CLAUDE.md -> "AI chat" for how to set this
 const unhash = enc => atob(enc).split("").reverse().join("");
 
 const chatState = { slug: null, step: null, history: {} };   // history: slug -> [{role, text}]
