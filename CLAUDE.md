@@ -89,8 +89,8 @@ small chat window (minimize with **–**). The chat follows what's on screen: on
 the recipe list it knows every recipe's name, description and ingredients, so it
 can help pick one; inside a recipe it knows that recipe in full. Each step also
 has a **💬 Ask** button (adds "I'm on step N" to the first question). It calls
-the **Gemini API directly from the browser** (`GEMINI_MODEL`, default
-`gemini-flash-latest`). The system prompt includes the full recipe at the
+the **Gemini API directly from the browser** (`GEMINI_MODELS`: `gemini-flash-latest`, falling back to
+`gemini-flash-lite-latest` if overloaded; each is retried once on 5xx). The system prompt includes the full recipe at the
 current serving size plus which ingredients/steps are checked off. History is
 kept separately per recipe (and for the list) until the page is reloaded.
 

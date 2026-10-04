@@ -755,12 +755,15 @@ function openDetail(s) {
 // this site's referrer + the Generative Language API, on a project with no
 // billing — so the worst case if someone copies it is hitting the free quota.
 // =====================================================================
-const GEMINI_MODEL = "gemini-flash-latest";   // Google alias for the current Flash model
+// Google aliases for the current models; the second is a fallback when the first is overloaded.
+const GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"];
 const GEMINI_KEY_ENC = "d2tBWUJHUzNMNjd4ZjZFZzFhSnVXS1dEdlpRODcwWnItRzRfZWdUWVRMZ0o2TlI4YkEuUUE=";   // see CLAUDE.md -> "AI chat" for how to set this
 const unhash = enc => atob(enc).split("").reverse().join("");
 
 const HOME = "__home";
-const chatState = { slug: HOME, step: null, history: {} };   // history: slug (or HOME) -> [{role, text}]
+// history: slug (or HOME) -> [{role: "user"|"model"|"error", text, failed?}]
+// "error" entries and failed questions are shown in the chat but never sent to the API.
+const chatState = { slug: HOME, step: null, history: {}, pending: null };   // pending: slug awaiting an answer
 const openRecipeSlug = () => {
   const h = location.hash.slice(1);
   return document.getElementById("overlay").classList.contains("open") && DATA.some(r => slug(r.name) === h) ? h : HOME;
@@ -800,7 +803,9 @@ function systemPrompt(s) {
 function drawChat() {
   const box = document.getElementById("chat-msgs");
   const hist = chatState.history[chatState.slug] || [];
-  box.innerHTML = hist.length ? hist.map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("")
+  const thinking = chatState.pending === chatState.slug ? `<div class="msg model typing">Thinking…</div>` : "";
+  document.querySelector("#chat-form button").disabled = !!chatState.pending;
+  box.innerHTML = hist.length ? hist.map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("") + thinking
     : `<div class="msg model">${chatState.slug === HOME
         ? "Hi! Tell me what ingredients you have or how much time you've got, and I'll suggest a recipe — or ask any cooking question."
         : "Hi! Ask me anything about this recipe — substitutions, timing, what to do if something went wrong."}</div>`;
@@ -837,22 +842,43 @@ function closeChat() {
   document.getElementById("chat-fab").classList.remove("hidden");
 }
 
-async function askGemini(s, hist) {
-  if (!GEMINI_KEY_ENC) throw new Error("Chat isn't set up yet (no API key configured).");
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+async function callGemini(model, body) {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": unhash(GEMINI_KEY_ENC) },
-    body: JSON.stringify({
-      systemInstruction: { parts: [{ text: systemPrompt(s) }] },
-      contents: hist.map(m => ({ role: m.role, parts: [{ text: m.text }] }))
-    })
+    body: JSON.stringify(body)
   });
-  if (res.status === 429) throw new Error("Free-tier limit hit — wait a minute and try again.");
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || `Request failed (${res.status}).`);
-  const text = (data.candidates?.[0]?.content?.parts || []).map(p => p.text || "").join("").trim();
-  if (!text) throw new Error("No answer came back — try rephrasing.");
-  return text;
+  const data = await res.json().catch(() => ({}));
+  return { res, data };
+}
+
+async function askGemini(s, hist) {
+  if (!GEMINI_KEY_ENC) throw new Error("Chat isn't set up yet (no API key configured).");
+  const body = {
+    systemInstruction: { parts: [{ text: systemPrompt(s) }] },
+    contents: hist.filter(m => m.role !== "error" && !m.failed)
+      .map(m => ({ role: m.role, parts: [{ text: m.text }] }))
+  };
+  let last;
+  // Overloaded (503) / server errors: retry once, then try the fallback model.
+  for (const model of GEMINI_MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try { last = await callGemini(model, body); }
+      catch { last = null; continue; }   // network hiccup
+      const { res, data } = last;
+      if (res.ok) {
+        const text = (data.candidates?.[0]?.content?.parts || []).filter(p => !p.thought).map(p => p.text || "").join("").trim();
+        if (text) return text;
+        throw new Error("No answer came back — try rephrasing.");
+      }
+      if (res.status < 500 && res.status !== 429) throw new Error(data.error?.message || `Request failed (${res.status}).`);
+      if (res.status === 429) break;   // this model's quota is used up; try the next one
+      await new Promise(r => setTimeout(r, 1200));
+    }
+  }
+  if (!last) throw new Error("Couldn't reach Gemini — check your connection and tap Send again.");
+  if (last.res.status === 429) throw new Error("Free-tier limit hit — wait a minute and tap Send again.");
+  throw new Error("Gemini is overloaded right now — wait a few seconds and tap Send again.");
 }
 
 document.getElementById("chat-close").onclick = closeChat;
@@ -862,30 +888,27 @@ document.getElementById("chat-form").onsubmit = async e => {
   const input = document.getElementById("chat-input");
   const btn = e.target.querySelector("button");
   const q = input.value.trim();
-  if (!q || btn.disabled) return;
+  if (!q || chatState.pending) return;
   const s = chatState.slug;
   const hist = chatState.history[s] ||= [];
   const prefix = chatState.step != null ? `(I'm on step ${chatState.step + 1}) ` : "";
-  hist.push({ role: "user", text: prefix + q });
+  const entry = { role: "user", text: prefix + q };
+  hist.push(entry);
   chatState.step = null;   // step context applies to the first question only
-  syncChat();
+  chatState.pending = s;
   input.value = "";
-  btn.disabled = true;
+  syncChat();
   drawChat();
-  const box = document.getElementById("chat-msgs");
-  box.insertAdjacentHTML("beforeend", `<div class="msg model typing">Thinking…</div>`);
-  box.scrollTop = box.scrollHeight;
   try {
     hist.push({ role: "model", text: await askGemini(s, hist) });
-    drawChat();
   } catch (err) {
-    hist.pop();   // drop the unanswered question so history stays user/model alternating
-    drawChat();
-    box.insertAdjacentHTML("beforeend", `<div class="msg error">${esc(err.message)}</div>`);
-    input.value = q;
+    // Keep the question visible but out of the API history (which must alternate user/model).
+    entry.failed = true;
+    hist.push({ role: "error", text: err.message });
+    if (chatState.slug === s && !input.value) input.value = q;
   } finally {
-    btn.disabled = false;
-    input.focus();
+    chatState.pending = null;
+    drawChat();
   }
 };
 
