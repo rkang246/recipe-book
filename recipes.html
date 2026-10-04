@@ -146,6 +146,76 @@
   .tag.cleanup { color: #b2f2bb; border-color: rgba(81,207,102,0.5); }
   .tag.equip { color: #ffd8a8; border-color: rgba(255,146,43,0.5); }
 
+  /* ---- Ingredient multi-search ---- */
+  .ing-search {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+    max-width: 520px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 5px 10px;
+    cursor: text;
+  }
+  .ing-search:focus-within { border-color: var(--accent); }
+  .ing-search input {
+    flex: 1;
+    min-width: 120px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    padding: 3px 4px;
+  }
+  .ing-search input:focus { outline: none; }
+  .chip {
+    background: var(--accent);
+    color: #0f1117;
+    border-radius: 999px;
+    padding: 2px 6px 2px 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .chip button {
+    background: none; border: none; color: #0f1117;
+    cursor: pointer; font-size: 0.9rem; padding: 0 2px; line-height: 1;
+  }
+  .suggest {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0; right: 0;
+    margin: 0; padding: 4px;
+    list-style: none;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    z-index: 5;
+    display: none;
+  }
+  .suggest.open { display: block; }
+  .suggest li {
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.88rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .suggest li.active, .suggest li:hover { background: var(--bg); }
+  .suggest li .via { color: var(--muted); font-size: 0.76rem; }
+  .suggest li .n { color: var(--muted); font-size: 0.76rem; white-space: nowrap; }
+  .card .c-has { margin-top: 6px; font-size: 0.78rem; color: #b2f2bb; }
+
   .empty { color: var(--muted); text-align: center; padding: 40px 0; }
 
   /* ---- Recipe detail overlay ---- */
@@ -261,7 +331,16 @@
 <div class="controls">
   <div class="control-group">
     <span class="control-label">Search</span>
-    <input id="search" class="search" type="search" placeholder="Dish, ingredient, tag…">
+    <input id="search" class="search" type="search" placeholder="Dish name, cuisine, tag…">
+  </div>
+  <div class="control-group">
+    <span class="control-label">Ingredients</span>
+    <div class="ing-search" id="ing-search">
+      <span id="chips" style="display:contents"></span>
+      <input id="ing-input" type="text" autocomplete="off" placeholder="Type an ingredient, e.g. beef…">
+      <ul class="suggest" id="suggest"></ul>
+    </div>
+    <button class="clear-btn" id="ing-clear">Clear</button>
   </div>
   <div class="control-group" id="cat-filters">
     <span class="control-label">Category</span>
@@ -318,7 +397,7 @@ const DATA = [
         { qty: 1, unit: "tsp", item: "grated ginger" }
       ]},
       { group: "Topping layer", items: [
-        { qty: 300, unit: "g", item: "thinly sliced beef", note: "(~2/3 lb) shabu-shabu / hot-pot cut ribeye or chuck" },
+        { qty: 300, unit: "g", item: "shabu-shabu beef", note: "(~2/3 lb) thinly sliced / hot-pot cut ribeye or chuck" },
         { qty: 1, unit: "", item: "yellow onion", note: "halved and thinly sliced" }
       ]},
       { group: "To serve", items: [
@@ -354,7 +433,8 @@ const state = {
   equip: new Set(),           // empty = no equipment filter
   collapsed: new Set(),
   servings: {},               // slug -> current servings
-  done: {}                    // slug -> Set of checked ids
+  done: {},                   // slug -> Set of checked ids
+  ings: []                    // selected ingredient chips (all must match)
 };
 const catMap = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
 const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
@@ -379,10 +459,75 @@ function haystack(r) {
     ...r.ingredients.flatMap(g => g.items.map(i => i.item))].join(" ").toLowerCase();
 }
 
+// ---- Ingredient matching (substring, plus 1-typo tolerance on word prefixes) ----
+function lev(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++)
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+// 0 = word-prefix match, 1 = substring, 2 = fuzzy (one typo), Infinity = no match
+function matchScore(q, text) {
+  q = q.toLowerCase(); text = text.toLowerCase();
+  const words = text.split(/[^a-z0-9]+/).filter(Boolean);
+  if (words.some(w => w.startsWith(q))) return 0;
+  if (text.includes(q)) return 1;
+  if (q.length >= 3) {
+    const tol = q.length >= 7 ? 2 : 1;
+    if (words.some(w => lev(q, w.slice(0, q.length)) <= tol)) return 2;
+  }
+  return Infinity;
+}
+const allIngs = r => r.ingredients.flatMap(g => g.items);
+// Typo tolerance applies to ingredient names only; notes must match exactly.
+const ingMatches = (chip, i) => matchScore(chip, i.item) < Infinity || matchScore(chip, i.note || "") <= 1;
+const hasIng = (r, chip) => allIngs(r).some(i => ingMatches(chip, i));
+
+// Unique ingredient names across all recipes -> { item, notes, count }
+const ING_INDEX = (() => {
+  const m = new Map();
+  DATA.forEach(r => allIngs(r).forEach(i => {
+    const k = i.item.toLowerCase();
+    if (k === "water") return;
+    if (!m.has(k)) m.set(k, { item: i.item, notes: new Set(), recipes: new Set() });
+    if (i.note) m.get(k).notes.add(i.note);
+    m.get(k).recipes.add(r.name);
+  }));
+  return [...m.values()];
+})();
+
+function suggestions(q) {
+  const chosen = new Set(state.ings.map(c => c.toLowerCase()));
+  return ING_INDEX
+    .filter(e => !chosen.has(e.item.toLowerCase()))
+    .map(e => {
+      const sItem = matchScore(q, e.item);
+      const via = [...e.notes].find(n => matchScore(q, n) <= 1);
+      return { e, score: Math.min(sItem, via ? matchScore(q, via) + 0.5 : Infinity), via: sItem === Infinity ? via : null };
+    })
+    .filter(x => x.score < Infinity)
+    .sort((a, b) => a.score - b.score || b.e.recipes.size - a.e.recipes.size || a.e.item.localeCompare(b.e.item))
+    .slice(0, 8);
+}
+
+// If the typed word cleanly matches several different ingredients (e.g. "rice" ->
+// short-grain rice, jasmine rice), offer the word itself as an "any" option first.
+function genericOption(q) {
+  q = q.trim().toLowerCase();
+  if (q.length < 3 || state.ings.some(c => c.toLowerCase() === q)) return null;
+  const hits = ING_INDEX.filter(e => matchScore(q, e.item) === 0);
+  if (hits.length < 2) return null;
+  const n = DATA.filter(r => hasIng(r, q)).length;
+  return { e: { item: q, recipes: { size: n } }, any: true };
+}
+
 function visible(r) {
   if (!state.cats.has(r.category)) return false;
   if (state.equip.size && !(r.equipment || []).some(e => state.equip.has(e))) return false;
   if (state.q && !haystack(r).includes(state.q)) return false;
+  if (!state.ings.every(c => hasIng(r, c))) return false;
   return true;
 }
 
@@ -453,6 +598,7 @@ function render() {
         <div class="card" style="--c:${c.color}" data-slug="${slug(r.name)}">
           <div class="c-name">${esc(r.name)}</div>
           <div class="c-desc">${esc(r.description)}</div>
+          ${state.ings.length ? `<div class="c-has">✓ ${state.ings.map(c => esc(allIngs(r).find(i => ingMatches(c, i)).item)).join(" · ")}</div>` : ""}
           ${metaTags(r)}
         </div>`).join("")}
       </div>
@@ -531,6 +677,63 @@ function closeDetail() {
 
 document.getElementById("overlay").onclick = e => { if (e.target.id === "overlay") closeDetail(); };
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+// ---- Ingredient chip input ----
+(() => {
+  const box = document.getElementById("ing-search");
+  const input = document.getElementById("ing-input");
+  const list = document.getElementById("suggest");
+  const chips = document.getElementById("chips");
+  let items = [], active = -1;
+
+  function drawChips() {
+    chips.innerHTML = state.ings.map((c, i) =>
+      `<span class="chip">${esc(c)}<button data-i="${i}" aria-label="Remove">×</button></span>`).join("");
+    chips.querySelectorAll("button").forEach(b => b.onclick = e => {
+      e.stopPropagation();
+      state.ings.splice(Number(b.dataset.i), 1);
+      drawChips(); render(); input.focus();
+    });
+  }
+  function drawList() {
+    const q = input.value.trim();
+    items = q ? suggestions(q) : [];
+    const g = q && genericOption(q);
+    if (g) items.unshift(g);
+    active = items.length ? 0 : -1;
+    list.innerHTML = items.map((x, i) => `<li data-i="${i}" class="${i === active ? "active" : ""}">
+        <span>${x.any ? `Any “${esc(x.e.item)}”` : esc(x.e.item)}${x.via ? ` <span class="via">${esc(x.via)}</span>` : ""}</span>
+        <span class="n">${x.e.recipes.size} recipe${x.e.recipes.size > 1 ? "s" : ""}</span></li>`).join("")
+      || (q ? `<li data-raw="1"><span>Add “${esc(q)}”</span><span class="n">no exact match</span></li>` : "");
+    list.classList.toggle("open", !!q);
+    list.querySelectorAll("li").forEach(li => li.onmousedown = e => {
+      e.preventDefault();
+      add(li.dataset.raw ? input.value.trim() : items[Number(li.dataset.i)].e.item);
+    });
+  }
+  function highlight() {
+    list.querySelectorAll("li").forEach((li, i) => li.classList.toggle("active", i === active));
+  }
+  function add(term) {
+    if (!term) return;
+    if (!state.ings.some(c => c.toLowerCase() === term.toLowerCase())) state.ings.push(term);
+    input.value = "";
+    drawChips(); drawList(); render(); input.focus();
+  }
+
+  box.onclick = () => input.focus();
+  input.oninput = drawList;
+  input.onblur = () => list.classList.remove("open");
+  input.onfocus = () => { if (input.value.trim()) drawList(); };
+  input.onkeydown = e => {
+    if (e.key === "ArrowDown" && items.length) { active = (active + 1) % items.length; highlight(); e.preventDefault(); }
+    else if (e.key === "ArrowUp" && items.length) { active = (active - 1 + items.length) % items.length; highlight(); e.preventDefault(); }
+    else if (e.key === "Enter") { e.preventDefault(); add(active >= 0 ? items[active].e.item : input.value.trim()); }
+    else if (e.key === "Backspace" && !input.value && state.ings.length) { state.ings.pop(); drawChips(); render(); }
+    else if (e.key === "Escape") { input.value = ""; list.classList.remove("open"); e.stopPropagation(); }
+  };
+  document.getElementById("ing-clear").onclick = () => { state.ings = []; input.value = ""; drawChips(); drawList(); render(); };
+})();
+
 document.getElementById("search").oninput = e => { state.q = e.target.value.trim().toLowerCase(); render(); };
 window.addEventListener("hashchange", () => openDetail(location.hash.slice(1)));
 

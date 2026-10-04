@@ -25,6 +25,10 @@ When researching and writing the recipe:
 - Write steps tersely and concretely (amounts already in ingredients; steps say
   what to do and the doneness cue). Usually 4–8 steps.
 - Be honest in `cleanup` about what gets dirty.
+- Name each ingredient `item` by what the user would search/shop for
+  ("shabu-shabu beef", "jasmine rice"); prep and cut details go in `note`.
+  Reuse existing ingredient names in `DATA` where it's the same thing, so the
+  ingredient search groups them.
 
 ## Workflow
 

@@ -58,6 +58,17 @@ const DATA = [
 | `unit` | Free text (`tbsp`, `g`, `cups`, `rice-cooker cups`) or `""` for counted items. |
 | `note` | Prep detail or substitutions, rendered muted after the item. |
 
+## Ingredient search
+
+The **Ingredients** box is a multi-select autocomplete built from every
+ingredient `item` in `DATA`. Each selected chip narrows results (recipes must
+contain **all** chips). Matching is word-prefix/substring with one-typo
+tolerance on ingredient names (`shav` → `shabu-shabu beef`); `note` text is
+searched exactly. Typing a word that matches several ingredients offers an
+`Any "<word>"` option first. Implication for data entry: **name `item` by the
+term you'd search for** (e.g. `"shabu-shabu beef"`, not `"thinly sliced
+beef"`), and put prep/cut details in `note`.
+
 ## Editing rules
 
 - **Only edit `DATA` (and `CATEGORIES` when a new category is genuinely needed).**
