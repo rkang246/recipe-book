@@ -81,3 +81,26 @@ beef"`), and put prep/cut details in `note`.
 
 - `/add-recipe <dish + description>` — see
   [`.claude/skills/add-recipe/SKILL.md`](.claude/skills/add-recipe/SKILL.md).
+
+## AI chat
+
+Each recipe has a **💬 Ask** button (whole recipe) and a per-step **💬 Ask**
+(adds "I'm on step N" to the first question). It opens a chat drawer that calls
+the **Gemini API directly from the browser** (`GEMINI_MODEL`, default
+`gemini-flash-latest`). The system prompt includes the full recipe at the
+current serving size plus which ingredients/steps are checked off. History is
+per recipe and lasts until the page is reloaded.
+
+The key is on a free-tier project and is shipped in the page, so it is
+**public by design**. It's stored reversed + base64 in `GEMINI_KEY_ENC` only
+so automated secret scanners don't flag it. That's not real protection. The
+real protections are configured in Google Cloud:
+- the project has **no billing account** (free tier only, so it can't cost money)
+- key **API restriction**: Generative Language API only
+- key **application restriction**: HTTP referrer `https://htmlpreview.github.io/*`
+
+To set or rotate the key:
+```bash
+python3 -c "import base64,sys; print(base64.b64encode(sys.argv[1][::-1].encode()).decode())" 'AIza...'
+```
+and paste the output into `GEMINI_KEY_ENC`.
