@@ -84,12 +84,15 @@ beef"`), and put prep/cut details in `note`.
 
 ## AI chat
 
-Each recipe has a **💬 Ask** button (whole recipe) and a per-step **💬 Ask**
-(adds "I'm on step N" to the first question). It opens a chat drawer that calls
+A floating **💬** button sits in the bottom-right on every screen and opens a
+small chat window (minimize with **–**). The chat follows what's on screen: on
+the recipe list it knows every recipe's name, description and ingredients, so it
+can help pick one; inside a recipe it knows that recipe in full. Each step also
+has a **💬 Ask** button (adds "I'm on step N" to the first question). It calls
 the **Gemini API directly from the browser** (`GEMINI_MODEL`, default
 `gemini-flash-latest`). The system prompt includes the full recipe at the
 current serving size plus which ingredients/steps are checked off. History is
-per recipe and lasts until the page is reloaded.
+kept separately per recipe (and for the list) until the page is reloaded.
 
 The key is on a free-tier project and is shipped in the page, so it is
 **public by design**. It's stored reversed + base64 in `GEMINI_KEY_ENC` only

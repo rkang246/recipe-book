@@ -237,7 +237,7 @@
     border-radius: 14px;
     max-width: 760px;
     width: 100%;
-    padding: 20px 22px 26px;
+    padding: 20px 22px 80px;
     position: relative;
   }
   .detail .close {
@@ -313,21 +313,31 @@
   ol.steps li .ask-step:hover { color: var(--text); border-color: var(--accent); }
 
   /* ---- AI chat drawer ---- */
-  .ask-btn {
-    margin-top: 14px;
+  .chat-fab {
+    position: fixed; right: 18px; bottom: 18px;
+    width: 52px; height: 52px; border-radius: 50%;
     background: var(--accent); color: #0f1117; border: none;
-    border-radius: 999px; padding: 8px 16px; font-weight: 600; font-size: 0.88rem; cursor: pointer;
+    font-size: 1.4rem; cursor: pointer;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+    z-index: 30;
+    transition: transform 0.15s ease;
   }
+  .chat-fab:hover { transform: scale(1.06); }
+  .chat-fab.hidden { display: none; }
   .chat {
-    position: fixed; left: 50%; bottom: 0; transform: translateX(-50%);
-    width: 100%; max-width: 760px; height: min(70vh, 560px);
+    position: fixed; right: 18px; bottom: 18px;
+    width: 360px; height: min(500px, calc(100vh - 36px));
     background: var(--panel-2);
-    border: 1px solid var(--line); border-bottom: none;
+    border: 1px solid var(--line);
     border-top: 3px solid var(--accent);
-    border-radius: 14px 14px 0 0;
-    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+    border-radius: 14px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.55);
     display: none; flex-direction: column;
-    z-index: 20;
+    z-index: 30;
+  }
+  @media (max-width: 600px) {
+    .chat { left: 8px; right: 8px; bottom: 8px; width: auto; height: 58vh; }
+    .chat-fab { right: 14px; bottom: 14px; }
   }
   .chat.open { display: flex; }
   .chat-head {
@@ -337,7 +347,7 @@
   .chat-head .sub { font-size: 0.75rem; }
   .chat-head button {
     background: none; border: 1px solid var(--line); color: var(--text);
-    border-radius: 999px; width: 30px; height: 30px; cursor: pointer;
+    border-radius: 999px; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0;
   }
   .chat-msgs { flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
   .msg { max-width: 88%; padding: 8px 12px; border-radius: 12px; font-size: 0.9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -404,10 +414,11 @@
 
 <main id="main"></main>
 
+<button class="chat-fab" id="chat-fab" aria-label="Ask a question">💬</button>
 <div class="chat" id="chat">
   <div class="chat-head">
-    <div><b>Ask about this recipe</b><div class="sub" id="chat-sub"></div></div>
-    <button id="chat-close" aria-label="Close chat">✕</button>
+    <div><b id="chat-title">Ask a cooking question</b><div class="sub" id="chat-sub"></div></div>
+    <button id="chat-close" aria-label="Minimize chat">–</button>
   </div>
   <div class="chat-msgs" id="chat-msgs"></div>
   <form class="chat-form" id="chat-form">
@@ -680,7 +691,7 @@ function render() {
 function openDetail(s) {
   const r = DATA.find(x => slug(x.name) === s);
   const ov = document.getElementById("overlay");
-  if (!r) { ov.classList.remove("open"); document.body.style.overflow = ""; return; }
+  if (!r) { ov.classList.remove("open"); document.body.style.overflow = ""; syncChat(); return; }
   const c = catMap[r.category] || {};
   const serv = state.servings[s] ?? r.servings ?? 1;
   const scale = r.servings ? serv / r.servings : 1;
@@ -709,7 +720,6 @@ function openDetail(s) {
     ${metaTags(r)}
     <p class="d-desc">${esc(r.description)}</p>
     <div class="times">${times.join("")}</div>
-    <button class="ask-btn" id="ask-btn">💬 Ask a question about this recipe</button>
     <h3>Ingredients
       ${r.servings ? `<span class="servings"><button data-d="-1">−</button><span>${serv} serving${serv > 1 ? "s" : ""}</span><button data-d="1">+</button></span>` : ""}
     </h3>
@@ -727,10 +737,9 @@ function openDetail(s) {
     done.has(id) ? done.delete(id) : done.add(id);
     li.classList.toggle("done");
   });
-  d.querySelector("#ask-btn").onclick = () => openChat(s, null);
   d.querySelectorAll(".ask-step").forEach(b => b.onclick = e => {
     e.stopPropagation();
-    openChat(s, Number(b.dataset.step));
+    openChat(Number(b.dataset.step));
   });
   d.querySelectorAll(".servings button").forEach(b => b.onclick = () => {
     state.servings[s] = Math.max(1, serv + Number(b.dataset.d));
@@ -738,6 +747,7 @@ function openDetail(s) {
   });
   ov.classList.add("open");
   document.body.style.overflow = "hidden";
+  syncChat();
 }
 
 // =====================================================================
@@ -749,7 +759,12 @@ const GEMINI_MODEL = "gemini-flash-latest";   // Google alias for the current Fl
 const GEMINI_KEY_ENC = "d2tBWUJHUzNMNjd4ZjZFZzFhSnVXS1dEdlpRODcwWnItRzRfZWdUWVRMZ0o2TlI4YkEuUUE=";   // see CLAUDE.md -> "AI chat" for how to set this
 const unhash = enc => atob(enc).split("").reverse().join("");
 
-const chatState = { slug: null, step: null, history: {} };   // history: slug -> [{role, text}]
+const HOME = "__home";
+const chatState = { slug: HOME, step: null, history: {} };   // history: slug (or HOME) -> [{role, text}]
+const openRecipeSlug = () => {
+  const h = location.hash.slice(1);
+  return document.getElementById("overlay").classList.contains("open") && DATA.some(r => slug(r.name) === h) ? h : HOME;
+};
 
 function recipeContext(s) {
   const r = DATA.find(x => slug(x.name) === s);
@@ -772,7 +787,13 @@ function recipeContext(s) {
   return lines.join("\n");
 }
 
+function homeContext() {
+  return "RECIPES ON THIS SITE:\n" + DATA.map(r =>
+    `- ${r.name} [${(catMap[r.category] || {}).label || r.category}; ${fmtMin(totalTime(r))}; ${(r.equipment || []).join(", ")}]: ${r.description} Ingredients: ${allIngs(r).map(i => i.item).join(", ")}`).join("\n");
+}
+
 function systemPrompt(s) {
+  if (s === HOME) return `You are a friendly, practical cooking helper on a small personal recipe site focused on easy, low-cleanup cooking. The user hasn't opened a specific recipe yet. Help them pick a recipe from the list below (e.g. based on ingredients they have or time available), or answer general cooking questions. Answer briefly, in plain text without markdown headers.\n\n${homeContext()}`;
   return `You are a friendly, practical cooking helper embedded in a recipe page. The user is cooking the recipe below right now, possibly mid-step with messy hands, so answer briefly (usually 1-4 sentences or a short list), concretely, and in plain text without markdown headers. These recipes prioritize ease and minimal cleanup — prefer substitutions and fixes that keep it that way. If a substitution would meaningfully change the result, say how. If something is unsafe (e.g. undercooked meat), say so clearly.\n\n${recipeContext(s)}`;
 }
 
@@ -780,23 +801,41 @@ function drawChat() {
   const box = document.getElementById("chat-msgs");
   const hist = chatState.history[chatState.slug] || [];
   box.innerHTML = hist.length ? hist.map(m => `<div class="msg ${m.role}">${esc(m.text)}</div>`).join("")
-    : `<div class="msg model">Hi! Ask me anything about this recipe — substitutions, timing, what to do if something went wrong.</div>`;
+    : `<div class="msg model">${chatState.slug === HOME
+        ? "Hi! Tell me what ingredients you have or how much time you've got, and I'll suggest a recipe — or ask any cooking question."
+        : "Hi! Ask me anything about this recipe — substitutions, timing, what to do if something went wrong."}</div>`;
   box.scrollTop = box.scrollHeight;
 }
 
-function openChat(s, step) {
+// Point the chat at whatever is on screen (a recipe, or the recipe list).
+function syncChat() {
+  const s = openRecipeSlug();
+  if (s !== chatState.slug) chatState.step = null;
   chatState.slug = s;
-  chatState.step = step;
   const r = DATA.find(x => slug(x.name) === s);
-  document.getElementById("chat-sub").textContent = r.name + (step != null ? ` · step ${step + 1}` : "");
-  const input = document.getElementById("chat-input");
-  input.placeholder = step != null ? `Question about step ${step + 1}…` : "e.g. Can I swap the ginger for something?";
-  document.getElementById("chat").classList.add("open");
-  drawChat();
-  input.focus();
+  document.getElementById("chat-title").textContent = r ? "Ask about this recipe" : "Ask a cooking question";
+  document.getElementById("chat-sub").textContent = r
+    ? r.name + (chatState.step != null ? ` · step ${chatState.step + 1}` : "")
+    : "Recipe ideas, substitutions, techniques";
+  document.getElementById("chat-input").placeholder = chatState.step != null ? `Question about step ${chatState.step + 1}…`
+    : r ? "e.g. Can I swap the ginger for something?" : "e.g. What can I make with beef and rice?";
+  if (document.getElementById("chat").classList.contains("open")) drawChat();
 }
 
-function closeChat() { document.getElementById("chat").classList.remove("open"); }
+function openChat(step = null) {
+  chatState.slug = openRecipeSlug();
+  chatState.step = step;
+  document.getElementById("chat").classList.add("open");
+  document.getElementById("chat-fab").classList.add("hidden");
+  syncChat();
+  drawChat();
+  document.getElementById("chat-input").focus();
+}
+
+function closeChat() {
+  document.getElementById("chat").classList.remove("open");
+  document.getElementById("chat-fab").classList.remove("hidden");
+}
 
 async function askGemini(s, hist) {
   if (!GEMINI_KEY_ENC) throw new Error("Chat isn't set up yet (no API key configured).");
@@ -817,6 +856,7 @@ async function askGemini(s, hist) {
 }
 
 document.getElementById("chat-close").onclick = closeChat;
+document.getElementById("chat-fab").onclick = () => openChat();
 document.getElementById("chat-form").onsubmit = async e => {
   e.preventDefault();
   const input = document.getElementById("chat-input");
@@ -828,6 +868,7 @@ document.getElementById("chat-form").onsubmit = async e => {
   const prefix = chatState.step != null ? `(I'm on step ${chatState.step + 1}) ` : "";
   hist.push({ role: "user", text: prefix + q });
   chatState.step = null;   // step context applies to the first question only
+  syncChat();
   input.value = "";
   btn.disabled = true;
   drawChat();
@@ -849,7 +890,6 @@ document.getElementById("chat-form").onsubmit = async e => {
 };
 
 function closeDetail() {
-  closeChat();
   history.pushState("", document.title, location.pathname + location.search);
   openDetail(null);
 }
