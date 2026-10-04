@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Easy Recipes</title>
+<style>
+  :root {
+    --bg: #0f1117;
+    --panel: #1a1d27;
+    --panel-2: #222632;
+    --text: #e7e9ee;
+    --muted: #9aa0ad;
+    --line: #2c303c;
+    --accent: #ffa94d;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.45;
+  }
+  header { padding: 28px 24px 8px; max-width: 1280px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 1.6rem; }
+  .sub { color: var(--muted); font-size: 0.95rem; margin: 0; }
+
+  .controls {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .control-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .control-label {
+    color: var(--muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 4px;
+    min-width: 70px;
+  }
+  .search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 420px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 0.9rem;
+  }
+  .search:focus { outline: none; border-color: var(--accent); }
+
+  .pill {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    user-select: none;
+  }
+  .pill:hover { border-color: var(--accent); }
+  .pill.off { opacity: 0.35; }
+  .cat-toggle::before {
+    content: "";
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+    background: var(--c, var(--muted));
+  }
+  .clear-btn {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .clear-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 8px 24px 60px; }
+
+  .section {
+    background: linear-gradient(90deg, var(--panel-2), var(--panel));
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--c, var(--muted));
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin-bottom: 20px;
+  }
+  .section h2 {
+    margin: 0 0 4px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    user-select: none;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .section h2 .count { font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+  .section .blurb { color: var(--muted); font-size: 0.82rem; margin: 0 0 12px; }
+  .section.collapsed h2 { margin-bottom: 0; }
+  .section.collapsed .blurb, .section.collapsed .grid { display: none; }
+
+  .caret {
+    display: inline-block;
+    width: 0.9em;
+    color: var(--muted);
+    transition: transform 0.15s ease;
+  }
+  .caret::before { content: "\25BE"; font-size: 0.85em; }
+  .collapsed .caret { transform: rotate(-90deg); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 14px;
+  }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--c, var(--muted));
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, transform 0.15s ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .card .c-name { font-weight: 700; font-size: 1.02rem; line-height: 1.25; }
+  .card .c-desc { color: var(--text); opacity: 0.82; font-size: 0.85rem; margin-top: 4px; }
+
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: 0.72rem; color: var(--muted); }
+  .tag { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; }
+  .tag.cat { color: var(--c); border-color: var(--c); }
+  .tag.cleanup { color: #b2f2bb; border-color: rgba(81,207,102,0.5); }
+  .tag.equip { color: #ffd8a8; border-color: rgba(255,146,43,0.5); }
+
+  .empty { color: var(--muted); text-align: center; padding: 40px 0; }
+
+  /* ---- Recipe detail overlay ---- */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    overflow-y: auto;
+    padding: 30px 12px;
+    z-index: 10;
+  }
+  .overlay.open { display: flex; }
+  .detail {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-top: 4px solid var(--c, var(--accent));
+    border-radius: 14px;
+    max-width: 760px;
+    width: 100%;
+    padding: 20px 22px 26px;
+    position: relative;
+  }
+  .detail .close {
+    position: absolute; top: 12px; right: 12px;
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 999px;
+    width: 34px; height: 34px; font-size: 1.1rem; cursor: pointer;
+  }
+  .detail .close:hover { border-color: var(--accent); }
+  .detail h2 { margin: 0 40px 4px 0; font-size: 1.4rem; }
+  .detail .d-desc { color: var(--text); opacity: 0.85; margin: 6px 0 0; }
+  .detail h3 {
+    font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); margin: 22px 0 8px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  }
+  .times { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+  .time-box {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; font-size: 0.8rem; color: var(--muted);
+  }
+  .time-box b { display: block; color: var(--text); font-size: 0.95rem; }
+
+  .servings { display: inline-flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: 0; }
+  .servings button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; width: 26px; height: 26px; cursor: pointer; font-size: 0.95rem;
+  }
+  .servings button:hover { border-color: var(--accent); }
+  .servings span { color: var(--text); font-size: 0.85rem; min-width: 74px; text-align: center; }
+
+  .ing-group { font-size: 0.78rem; color: var(--accent); margin: 10px 0 4px; font-weight: 600; }
+  ul.ings, ol.steps, ul.tips { margin: 0; padding: 0; list-style: none; }
+  ul.ings li {
+    padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.92rem;
+    display: flex; gap: 8px; align-items: baseline;
+  }
+  ul.ings li:hover { background: var(--panel-2); }
+  ul.ings li::before { content: "\2610"; color: var(--muted); }
+  ul.ings li.done { opacity: 0.4; text-decoration: line-through; }
+  ul.ings li.done::before { content: "\2611"; }
+  ul.ings .qty { font-weight: 600; white-space: nowrap; }
+  ul.ings .note { color: var(--muted); font-size: 0.82rem; }
+
+  ol.steps { counter-reset: step; }
+  ol.steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 8px 10px 8px 40px;
+    margin-bottom: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.92rem;
+  }
+  ol.steps li::before {
+    content: counter(step);
+    position: absolute; left: 10px; top: 8px;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--c, var(--accent)); color: #0f1117;
+    font-size: 0.75rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+  ol.steps li.done { opacity: 0.4; }
+  ol.steps li.done::before { content: "\2713"; }
+
+  ul.tips li {
+    font-size: 0.86rem; color: var(--muted);
+    padding-left: 18px; position: relative; margin-bottom: 4px;
+  }
+  ul.tips li::before { content: "\2192"; position: absolute; left: 0; color: var(--accent); }
+  .hint { color: var(--muted); font-size: 0.72rem; text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .source { margin-top: 18px; font-size: 0.8rem; color: var(--muted); }
+  .source a { color: var(--accent); }
+
+  @media (max-width: 600px) {
+    header, .controls, main { padding-left: 14px; padding-right: 14px; }
+    .overlay { padding: 0; }
+    .detail { border-radius: 0; min-height: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Easy Recipes</h1>
+  <p class="sub">Low-effort, low-cleanup cooking — grouped by category. Tap a recipe to open it.</p>
+</header>
+
+<div class="controls">
+  <div class="control-group">
+    <span class="control-label">Search</span>
+    <input id="search" class="search" type="search" placeholder="Dish, ingredient, tag…">
+  </div>
+  <div class="control-group" id="cat-filters">
+    <span class="control-label">Category</span>
+  </div>
+  <div class="control-group" id="equip-filters">
+    <span class="control-label">Equipment</span>
+  </div>
+</div>
+
+<main id="main"></main>
+
+<div class="overlay" id="overlay">
+  <div class="detail" id="detail"></div>
+</div>
+
+<script>
+// =====================================================================
+// CATEGORIES — sections on the page, in display order.
+// Add a new entry here only when a recipe needs a category that doesn't exist.
+// =====================================================================
+const CATEGORIES = [
+  { key: "one-bowl",  label: "One Bowl / One Pot", color: "#ffa94d", blurb: "Everything in a single vessel — minimal cleanup." },
+  { key: "sheet-pan", label: "Sheet Pan",          color: "#ff8787", blurb: "Toss it on a tray, roast, done." },
+  { key: "appetizer", label: "Appetizers & Snacks", color: "#74c0fc", blurb: "Small bites and starters." },
+  { key: "side",      label: "Sides",              color: "#8ce99a", blurb: "Easy accompaniments." },
+  { key: "dessert",   label: "Desserts",           color: "#e599f7", blurb: "Sweet stuff, still low effort." }
+];
+
+// =====================================================================
+// DATA — all recipes live here. See CLAUDE.md for the field reference.
+// =====================================================================
+const DATA = [
+  {
+    name: "Rice Cooker Gyudon",
+    category: "one-bowl",
+    description: "Japanese beef-and-onion rice bowl where the rice, beef and sweet-savory sauce all cook together in the rice cooker. Dump, press start, top with an egg.",
+    cuisine: "Japanese",
+    equipment: ["Rice cooker"],
+    cleanup: "Rice cooker pot + cutting board",
+    servings: 3,
+    time: { prep: 10, cook: 50 },
+    tags: ["beef", "rice", "donburi", "hands-off"],
+    ingredients: [
+      { group: "Base", items: [
+        { qty: 2, unit: "rice-cooker cups", item: "Japanese short-grain rice", note: "(~360 ml) rinsed until water runs mostly clear" },
+        { qty: null, unit: "", item: "Water", note: "to the 2-cup line, added after the sauce" }
+      ]},
+      { group: "Sauce", items: [
+        { qty: 3, unit: "tbsp", item: "soy sauce" },
+        { qty: 2, unit: "tbsp", item: "mirin" },
+        { qty: 2, unit: "tbsp", item: "sake", note: "or more mirin / water" },
+        { qty: 1, unit: "tbsp", item: "sugar" },
+        { qty: 1, unit: "tsp", item: "dashi powder", note: "(hondashi), optional but recommended" },
+        { qty: 1, unit: "tsp", item: "grated ginger" }
+      ]},
+      { group: "Topping layer", items: [
+        { qty: 300, unit: "g", item: "thinly sliced beef", note: "(~2/3 lb) shabu-shabu / hot-pot cut ribeye or chuck" },
+        { qty: 1, unit: "", item: "yellow onion", note: "halved and thinly sliced" }
+      ]},
+      { group: "To serve", items: [
+        { qty: 3, unit: "", item: "eggs", note: "raw yolks, onsen tamago, or soft-boiled" },
+        { qty: 2, unit: "", item: "green onions", note: "sliced" },
+        { qty: null, unit: "", item: "Beni shoga (pickled red ginger)", note: "optional" },
+        { qty: null, unit: "", item: "Shichimi togarashi", note: "optional" }
+      ]}
+    ],
+    steps: [
+      "Rinse the rice in the rice-cooker pot 3–4 times until the water runs mostly clear, then drain well.",
+      "Add the soy sauce, mirin, sake, sugar, dashi powder and ginger to the pot FIRST, then top up with water to the 2-cup line. Stir once to dissolve.",
+      "Toss the beef with a splash of the sauce from the pot (optional, for more flavor). Spread the sliced onion over the rice, then lay the beef on top in an even layer. Do NOT stir — keeping the toppings on top keeps the rice from going gummy.",
+      "Cook on the regular white-rice setting.",
+      "When it finishes, let it rest 10 minutes. Break up the beef and gently fold everything together (or scoop beef off the top and serve it over the rice, donburi-style).",
+      "Serve in bowls topped with an egg yolk or soft egg, green onions, and beni shoga / shichimi if using."
+    ],
+    tips: [
+      "Look for pre-sliced 'shabu-shabu' or 'hot pot' beef at Japanese/Korean markets — it cooks perfectly in the steam.",
+      "Brown rice / mixed-grain settings run longer; stick with white rice for best texture.",
+      "Rice a bit wet? Leave it on 'keep warm' with the lid cracked for 5 more minutes.",
+      "Doubles easily in a 5.5-cup cooker: 4 cups rice, double everything else."
+    ]
+  }
+];
+
+// =====================================================================
+// Rendering — no need to edit below this line to add recipes.
+// =====================================================================
+const state = {
+  q: "",
+  cats: new Set(CATEGORIES.map(c => c.key)),
+  equip: new Set(),           // empty = no equipment filter
+  collapsed: new Set(),
+  servings: {},               // slug -> current servings
+  done: {}                    // slug -> Set of checked ids
+};
+const catMap = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
+const slug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? " " + (m % 60) + " min" : ""}` : `${m} min`;
+const totalTime = r => (r.time?.prep || 0) + (r.time?.cook || 0);
+
+function fmtQty(q) {
+  if (q == null) return "";
+  if (q >= 20) return String(Math.round(q));
+  const whole = Math.floor(q), frac = q - whole;
+  const fracs = [[0, ""], [1/4, "¼"], [1/3, "⅓"], [1/2, "½"], [2/3, "⅔"], [3/4, "¾"], [1, ""]];
+  let best = fracs[0];
+  for (const f of fracs) if (Math.abs(frac - f[0]) < Math.abs(frac - best[0])) best = f;
+  const w = best[0] === 1 ? whole + 1 : whole;
+  if (Math.abs(frac - best[0]) > 0.06) return (Math.round(q * 10) / 10).toString();
+  return (w ? w : "") + best[1] || "0";
+}
+
+function haystack(r) {
+  return [r.name, r.description, r.cuisine, ...(r.tags || []), ...(r.equipment || []),
+    ...r.ingredients.flatMap(g => g.items.map(i => i.item))].join(" ").toLowerCase();
+}
+
+function visible(r) {
+  if (!state.cats.has(r.category)) return false;
+  if (state.equip.size && !(r.equipment || []).some(e => state.equip.has(e))) return false;
+  if (state.q && !haystack(r).includes(state.q)) return false;
+  return true;
+}
+
+function metaTags(r) {
+  const c = catMap[r.category];
+  const t = [];
+  if (c) t.push(`<span class="tag cat" style="--c:${c.color}">${esc(c.label)}</span>`);
+  if (totalTime(r)) t.push(`<span class="tag">⏱ ${fmtMin(totalTime(r))}</span>`);
+  if (r.servings) t.push(`<span class="tag">🍽 ${r.servings} servings</span>`);
+  (r.equipment || []).forEach(e => t.push(`<span class="tag equip">${esc(e)}</span>`));
+  if (r.cleanup) t.push(`<span class="tag cleanup">🧽 ${esc(r.cleanup)}</span>`);
+  if (r.cuisine) t.push(`<span class="tag">${esc(r.cuisine)}</span>`);
+  return `<div class="meta">${t.join("")}</div>`;
+}
+
+function buildFilters() {
+  const cf = document.getElementById("cat-filters");
+  CATEGORIES.filter(c => DATA.some(r => r.category === c.key)).forEach(c => {
+    const b = document.createElement("span");
+    b.className = "pill cat-toggle";
+    b.style.setProperty("--c", c.color);
+    b.textContent = c.label;
+    b.onclick = () => {
+      state.cats.has(c.key) ? state.cats.delete(c.key) : state.cats.add(c.key);
+      b.classList.toggle("off", !state.cats.has(c.key));
+      render();
+    };
+    cf.appendChild(b);
+  });
+
+  const ef = document.getElementById("equip-filters");
+  const equip = [...new Set(DATA.flatMap(r => r.equipment || []))].sort();
+  if (!equip.length) { ef.style.display = "none"; return; }
+  equip.forEach(e => {
+    const b = document.createElement("span");
+    b.className = "pill off";
+    b.textContent = e;
+    b.onclick = () => {
+      state.equip.has(e) ? state.equip.delete(e) : state.equip.add(e);
+      b.classList.toggle("off", !state.equip.has(e));
+      render();
+    };
+    ef.appendChild(b);
+  });
+  const clr = document.createElement("button");
+  clr.className = "clear-btn";
+  clr.textContent = "Any";
+  clr.onclick = () => {
+    state.equip.clear();
+    ef.querySelectorAll(".pill").forEach(p => p.classList.add("off"));
+    render();
+  };
+  ef.appendChild(clr);
+}
+
+function render() {
+  const main = document.getElementById("main");
+  let html = "";
+  CATEGORIES.forEach(c => {
+    const recipes = DATA.filter(r => r.category === c.key && visible(r))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!recipes.length) return;
+    const col = state.collapsed.has(c.key) ? " collapsed" : "";
+    html += `<section class="section${col}" style="--c:${c.color}" data-cat="${c.key}">
+      <h2><span class="caret"></span>${esc(c.label)} <span class="count">${recipes.length} recipe${recipes.length > 1 ? "s" : ""}</span></h2>
+      <p class="blurb">${esc(c.blurb || "")}</p>
+      <div class="grid">${recipes.map(r => `
+        <div class="card" style="--c:${c.color}" data-slug="${slug(r.name)}">
+          <div class="c-name">${esc(r.name)}</div>
+          <div class="c-desc">${esc(r.description)}</div>
+          ${metaTags(r)}
+        </div>`).join("")}
+      </div>
+    </section>`;
+  });
+  main.innerHTML = html || `<div class="empty">No recipes match.</div>`;
+  main.querySelectorAll(".section h2").forEach(h => h.onclick = () => {
+    const k = h.parentElement.dataset.cat;
+    state.collapsed.has(k) ? state.collapsed.delete(k) : state.collapsed.add(k);
+    h.parentElement.classList.toggle("collapsed");
+  });
+  main.querySelectorAll(".card").forEach(el => el.onclick = () => { location.hash = el.dataset.slug; });
+}
+
+function openDetail(s) {
+  const r = DATA.find(x => slug(x.name) === s);
+  const ov = document.getElementById("overlay");
+  if (!r) { ov.classList.remove("open"); document.body.style.overflow = ""; return; }
+  const c = catMap[r.category] || {};
+  const serv = state.servings[s] ?? r.servings ?? 1;
+  const scale = r.servings ? serv / r.servings : 1;
+  const done = state.done[s] ||= new Set();
+
+  const times = [];
+  if (r.time?.prep) times.push(`<div class="time-box"><b>${fmtMin(r.time.prep)}</b>prep</div>`);
+  if (r.time?.cook) times.push(`<div class="time-box"><b>${fmtMin(r.time.cook)}</b>cook</div>`);
+  if (totalTime(r)) times.push(`<div class="time-box"><b>${fmtMin(totalTime(r))}</b>total</div>`);
+
+  const ings = r.ingredients.map((g, gi) => `
+    ${g.group ? `<div class="ing-group">${esc(g.group)}</div>` : ""}
+    <ul class="ings">${g.items.map((i, ii) => {
+      const id = `i${gi}-${ii}`;
+      const q = i.qty != null ? `<span class="qty">${fmtQty(i.qty * scale)}${i.unit ? " " + esc(i.unit) : ""}</span>` : "";
+      return `<li data-id="${id}" class="${done.has(id) ? "done" : ""}">${q}<span>${esc(i.item)}${i.note ? ` <span class="note">${esc(i.note)}</span>` : ""}</span></li>`;
+    }).join("")}</ul>`).join("");
+
+  const steps = r.steps.map((st, si) =>
+    `<li data-id="s${si}" class="${done.has("s" + si) ? "done" : ""}">${esc(st)}</li>`).join("");
+
+  document.getElementById("detail").style.setProperty("--c", c.color || "");
+  document.getElementById("detail").innerHTML = `
+    <button class="close" aria-label="Close">✕</button>
+    <h2>${esc(r.name)}</h2>
+    ${metaTags(r)}
+    <p class="d-desc">${esc(r.description)}</p>
+    <div class="times">${times.join("")}</div>
+    <h3>Ingredients
+      ${r.servings ? `<span class="servings"><button data-d="-1">−</button><span>${serv} serving${serv > 1 ? "s" : ""}</span><button data-d="1">+</button></span>` : ""}
+    </h3>
+    <div class="hint">Tap items to check them off.</div>
+    ${ings}
+    <h3>Steps</h3>
+    <ol class="steps">${steps}</ol>
+    ${r.tips?.length ? `<h3>Tips</h3><ul class="tips">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
+    ${r.source ? `<div class="source">Source: ${r.source.url ? `<a href="${esc(r.source.url)}" target="_blank" rel="noopener">${esc(r.source.label || r.source.url)}</a>` : esc(r.source.label)}</div>` : ""}
+  `;
+  const d = document.getElementById("detail");
+  d.querySelector(".close").onclick = closeDetail;
+  d.querySelectorAll("li[data-id]").forEach(li => li.onclick = () => {
+    const id = li.dataset.id;
+    done.has(id) ? done.delete(id) : done.add(id);
+    li.classList.toggle("done");
+  });
+  d.querySelectorAll(".servings button").forEach(b => b.onclick = () => {
+    state.servings[s] = Math.max(1, serv + Number(b.dataset.d));
+    openDetail(s);
+  });
+  ov.classList.add("open");
+  document.body.style.overflow = "hidden";
+}
+
+function closeDetail() {
+  history.pushState("", document.title, location.pathname + location.search);
+  openDetail(null);
+}
+
+document.getElementById("overlay").onclick = e => { if (e.target.id === "overlay") closeDetail(); };
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeDetail(); });
+document.getElementById("search").oninput = e => { state.q = e.target.value.trim().toLowerCase(); render(); };
+window.addEventListener("hashchange", () => openDetail(location.hash.slice(1)));
+
+buildFilters();
+render();
+if (location.hash) openDetail(location.hash.slice(1));
+</script>
+</body>
+</html>
