@@ -42,7 +42,7 @@ When researching and writing the recipe:
    `node --check`), then commit and push to `main`.
 6. **Reply** with a 2–3 line summary (category, time, servings, key equipment)
    and the deep link:
-   `https://htmlpreview.github.io/?https://github.com/rkang246/recipes/blob/main/recipes.html#<slug>`
+   `https://htmlpreview.github.io/?https://github.com/rkang246/recipe-book/blob/main/recipes.html#<slug>`
 
 If the user's request is ambiguous (e.g. which variant, or a judgment call on
 category), make a sensible choice, add it, and mention the choice in the reply

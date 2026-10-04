@@ -11,7 +11,7 @@ inside [`recipes.html`](recipes.html).** There is no database, build step, or
 external file. Open `recipes.html` in a browser to view it.
 
 Live preview (GitHub HTML preview):
-https://htmlpreview.github.io/?https://github.com/rkang246/recipes/blob/main/recipes.html
+https://htmlpreview.github.io/?https://github.com/rkang246/recipe-book/blob/main/recipes.html
 
 Deep-link to a recipe by appending `#<slug>` (lowercased name, non-alphanumerics
 → `-`), e.g. `…/recipes.html#rice-cooker-gyudon`.
