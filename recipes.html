@@ -269,13 +269,22 @@
   .servings button:hover { border-color: var(--accent); }
   .servings span { color: var(--text); font-size: 0.85rem; min-width: 74px; text-align: center; }
 
-  .ing-group { font-size: 0.78rem; color: var(--accent); margin: 10px 0 4px; font-weight: 600; }
+  .ing-box {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--c, var(--accent));
+    border-radius: 10px;
+    padding: 10px 12px 12px;
+  }
+  .ing-box .hint { margin: 0 0 2px 8px; }
+  .ing-group { font-size: 0.78rem; color: var(--accent); margin: 10px 0 4px 8px; font-weight: 600; }
+  .ing-box .ing-group:first-of-type { margin-top: 6px; }
   ul.ings, ol.steps, ul.tips { margin: 0; padding: 0; list-style: none; }
   ul.ings li {
     padding: 5px 8px; border-radius: 6px; cursor: pointer; font-size: 0.92rem;
     display: flex; gap: 8px; align-items: baseline;
   }
-  ul.ings li:hover { background: var(--panel-2); }
+  ul.ings li:hover { background: var(--bg); }
   ul.ings li::before { content: "\2610"; color: var(--muted); }
   ul.ings li.done { opacity: 0.4; text-decoration: line-through; }
   ul.ings li.done::before { content: "\2611"; }
@@ -723,8 +732,10 @@ function openDetail(s) {
     <h3>Ingredients
       ${r.servings ? `<span class="servings"><button data-d="-1">−</button><span>${serv} serving${serv > 1 ? "s" : ""}</span><button data-d="1">+</button></span>` : ""}
     </h3>
-    <div class="hint">Tap items to check them off.</div>
-    ${ings}
+    <div class="ing-box">
+      <div class="hint">Tap items to check them off.</div>
+      ${ings}
+    </div>
     <h3>Steps</h3>
     <ol class="steps">${steps}</ol>
     ${r.tips?.length ? `<h3>Tips</h3><ul class="tips">${r.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : ""}
